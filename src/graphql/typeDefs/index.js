@@ -46,9 +46,10 @@ const typeDefs = gql`
     }
 
     input RegisterInput {
-        username: String!
+        username: String!   
         email: String!
         password: String!
+        role: String
     }
 
     input LoginInput {
@@ -88,6 +89,18 @@ const typeDefs = gql`
         user: User
     }
 
+    input UpdateUserInput {
+        username: String
+        email: String
+        password: String
+        role: String
+    }
+
+    type DeleteUserResponse {
+        success: Boolean!
+        message: String!
+    }
+
     type Query {
         me: User
         user(id: ID!): User
@@ -121,6 +134,9 @@ const typeDefs = gql`
         addComment(recipeId: ID!, content: String!): Comment!
         updateComment(id: ID!, content: String!): Comment!
         deleteComment(id: ID!): Boolean!
+
+        updateUser(id: ID!, input: UpdateUserInput!): User!
+        deleteUser(id: ID!): DeleteUserResponse!
     }
 `;
 

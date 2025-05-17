@@ -1,8 +1,10 @@
 const User = require('../../models/user');
 const Recipe = require('../../models/recipe');
+const Comment = require('../../models/comment');
 const jwt = require('jsonwebtoken');
-const { AuthenticationError, UserInputError } = require('apollo-server-express');
+const { AuthenticationError, UserInputError, ForbiddenError } = require('apollo-server-express');
 const { env } = require('../../configs/environment');
+const bcrypt = require('bcryptjs');
 
 const generateToken = user => {
     return jwt.sign(
@@ -120,6 +122,106 @@ module.exports = {
 
             return updateUser;
         },
+
+        updateUser: async (_, { id, input }, { user }) => {
+            if (!user) {
+                throw new AuthenticationError('You must be logged in to update your profile.');
+            }
+
+            if (user.id !== id && user.role !== 'admin') {
+                console.log(user)
+                throw new AuthenticationError('You are not authorized to update this user.');
+            }
+
+            const userToUpdate = await User.findById(id);
+            if (!userToUpdate) {
+                throw new UserInputError('User not found');
+            }
+
+            if (input.email && input.email !== userToUpdate.email) {
+                const existingUser = await User.findOne({ email: input.email });
+                if (existingUser) {
+                    throw new UserInputError('Email already exists');
+                }
+            }
+
+            if (input.username && input.username !== userToUpdate.username) {
+                const existingUser = await User.findOne({ username: input.username });
+                if (existingUser) {
+                    throw new UserInputError('Username already exists');
+                }
+            }
+
+            const updateData = {};
+
+            if (input.username) updateData.username = input.username;
+            if (input.email) updateData.email = input.email;
+            if (input.role) updateData.role = input.role;
+
+            if (input.password) {
+                const salt = await bcrypt.genSalt(10);
+                updateData.password = await bcrypt.hash(input.password, salt);
+                // updateData.password = input.password;
+            }
+
+            const updatedUser = await User.findByIdAndUpdate(
+                id,
+                { $set: updateData },
+                { new: true }
+            );
+
+            return updatedUser;
+        },
+        deleteUser: async (_, { id }, { user }) => {
+            if (!user) {
+                throw new AuthenticationError('You must be logged in to delete your account.');
+            }
+
+            if (user.id !== id && user.role !== 'admin') {
+                throw new ForbiddenError('You are not authorized to delete this user.');
+            }
+
+            const userToDelete = await User.findById(id);
+            if (!userToDelete) {
+                throw new UserInputError('User not found');
+            }
+
+            try {
+                await Recipe.deleteMany({ author: id });
+
+                await Comment.deleteMany({ author: id });
+
+                await User.findByIdAndDelete(id);
+
+                return {
+                    success: true,
+                    message: 'User deleted successfully',
+                };
+            } catch (error) {
+                console.error('Error deleting user:', error);
+                return {
+                    success: false,
+                    message: 'Failed to delete user',
+                    error: error.message,
+                };
+            }
+        },
+    },
+
+    removeFromFavorites: async (_, { recipeId }, { user }) => {
+        if (!user) {
+            throw new AuthenticationError(
+                'You must be logged in to remove a recipe from favorites.'
+            );
+        }
+
+        const updateUser = await User.findByIdAndUpdate(
+            user.id,
+            { $pull: { favoriteRecipes: recipeId } },
+            { new: true }
+        ).populate('favoriteRecipes');
+
+        return updateUser;
     },
 
     User: {
