@@ -44,13 +44,87 @@ module.exports = {
                 throw new Error('Comment not found');
             }
 
+            const isOwner = comment.author.toString() === user.id;
+            const isAdmin = user.role === 'admin';
+
+            if (!isOwner && !isAdmin) {
+                throw new Error('You are not authorized to delete this comment');
+            }
+
+            if (isAdmin && !isOwner) {
+                console.log(
+                    `Admin ${user.email} is deleting comment ${id} by user ${comment.author}`
+                );
+            }
+
             if (comment.author.toString() !== user.id && user.role !== 'admin') {
                 throw new AuthenticationError('You are not authorized to delete this comment');
             }
 
             await Comment.findByIdAndDelete(id);
 
-            return true;
+            return {
+                success: true,
+                message: isAdmin && !isOwner ? 'Comment deleted by admin' : 'Comment deleted',
+                deleteBy: user.role,
+            };
+        },
+
+        deleteMultipleComments: async (_, { commentIds }, { user }) => {
+            if (!user) {
+                throw new AuthenticationError('You must be logged in to delete comments');
+            }
+
+            if (user.role !== 'admin') {
+                throw new AuthenticationError('You are not authorized to delete comments');
+            }
+
+            try {
+                const comments = await Comment.find({ _id: { $in: commentIds } });
+                if (comments.length === 0) {
+                    throw new Error('No comments found');
+                }
+                const result = await Comment.deleteMany({ _id: { $in: commentIds } });
+                console.log(`Admin ${user.username} deleted ${result.deletedCount} comments`);
+
+                return {
+                    success: true,
+                    message: `Successfully deleted ${result.deletedCount} comments`,
+                    deletedCount: result.deletedCount,
+                };
+            } catch (error) {
+                console.error('Error deleting comments:', error);
+                throw new Error('Error deleting comments');
+            }
+        },
+
+        deleteUserComments: async (_, { userId }, { user }) => {
+            if (!user) {
+                throw new AuthenticationError('You must be logged in to delete comments');
+            }
+
+            if (user.role !== 'admin') {
+                throw new Error('You are not authorized to delete comments');
+            }
+
+            try {
+                const targetUser = await User.findById(userId);
+                if (!targetUser) {
+                    throw new Error('User not found');
+                }
+
+                const result = await Comment.deleteMany({ author: userId });
+                console.log(`Admin ${user.username} deleted ${result.deletedCount} comments`);
+
+                return {
+                    success: true,
+                    message: `Successfully deleted ${result.deletedCount} comments`,
+                    deletedCount: result.deletedCount,
+                    targetUser: targetUser.username,
+                };
+            } catch (error) {
+                throw new Error(`Error deleting comments: ${error.message}`);
+            }
         },
     },
 

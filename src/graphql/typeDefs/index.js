@@ -64,6 +64,7 @@ const typeDefs = gql`
     }
 
     input RecipeInput {
+        id: ID
         title: String!
         description: String!
         ingredients: [IngredientInput!]!
@@ -74,6 +75,7 @@ const typeDefs = gql`
     }
 
     input RecipeUpdateInput {
+        id: ID
         title: String
         description: String
         ingredients: [IngredientInput!]
@@ -99,6 +101,25 @@ const typeDefs = gql`
     type DeleteUserResponse {
         success: Boolean!
         message: String!
+    }
+
+    type DeleteCommentResponse {
+        success: Boolean!
+        message: String!
+        deleteBy: String!
+    }
+
+    type DeleteMultipleCommentsResponse {
+        success: Boolean!
+        message: String!
+        deletedCount: Int!
+    }
+
+    type DeleteUserCommentsResponse {
+        success: Boolean!
+        message: String!
+        deletedCount: Int!
+        targetUser: String!
     }
 
     type Query {
@@ -133,10 +154,14 @@ const typeDefs = gql`
 
         addComment(recipeId: ID!, content: String!): Comment!
         updateComment(id: ID!, content: String!): Comment!
-        deleteComment(id: ID!): Boolean!
+        deleteComment(id: ID!): DeleteCommentResponse!
+        deleteMultipleComments(commentIds: [ID!]!): DeleteMultipleCommentsResponse!
+        deleteUserComments(userId: ID!): DeleteUserCommentsResponse!
 
         updateUser(id: ID!, input: UpdateUserInput!): User!
         deleteUser(id: ID!): DeleteUserResponse!
+
+        
     }
 `;
 

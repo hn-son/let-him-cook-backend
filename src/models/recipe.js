@@ -43,7 +43,6 @@ const RecipeSchema = new mongoose.Schema({
     },
     imageUrl: {
         type: String,
-        // required: true,
     },
     author: {
         type: mongoose.Schema.Types.ObjectId,
