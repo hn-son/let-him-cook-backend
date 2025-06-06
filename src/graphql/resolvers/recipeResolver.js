@@ -2,25 +2,69 @@ const Recipe = require('../../models/recipe');
 const User = require('../../models/user');
 const Comment = require('../../models/comment');
 const { AuthenticationError, UserInputError, ForbiddenError } = require('apollo-server-express');
+const { transformId } = require('../../utils');
 
 module.exports = {
     Query: {
         recipe: async (_, { id }) => {
-            return await Recipe.findById(id);
+            const recipe = await Recipe.findById(id).lean();
+            return transformId(recipe);
         },
 
-        recipes: async (_, { limit = 10, offset = 0 }) => {
-            return await Recipe.find({ isApproved: true })
-                .sort({ createdAt: -1 })
-                .skip(offset)
-                .limit(limit);
+        recipes: async (_, { limit = 10, offset = 0, search }) => {
+            let query = { isApproved: true };
+            let sortOptions = { createdAt: -1 };
+            let results;
+            console.log('Search for: ', search);
+            if (search) {
+                try {
+                    // Thử sử dụng text search trước
+                    query.$text = { $search: search };
+                    sortOptions = {
+                        score: { $meta: 'textScore' },
+                        createdAt: -1,
+                    };
+
+                    results = await Recipe.find(query, { score: { $meta: 'textScore' } })
+                        .sort(sortOptions)
+                        .skip(offset)
+                        .limit(limit)
+                        .lean();
+                } catch (error) {
+                    // Nếu không có text index, fallback về regex
+                    console.log('Text index not found, using regex search');
+                    query = {
+                        isApproved: true,
+                        title: {
+                            $regex: search,
+                            $options: 'i',
+                        },
+                    };
+
+                    results = await Recipe.find(query)
+                        .sort({ createdAt: -1 })
+                        .skip(offset)
+                        .limit(limit)
+                        .lean();
+                }
+            } else {
+                results = await Recipe.find(query)
+                    .sort(sortOptions)
+                    .skip(offset)
+                    .limit(limit)
+                    .lean();
+            }
+
+            return transformId(results);
         },
 
         recipesByIngredients: async (_, { ingredients }) => {
-            return await Recipe.find({
+            const results = await Recipe.find({
                 'ingredients.name': { $in: ingredients },
                 isApproved: true,
             });
+
+            return transformId(results);
         },
 
         favoriteRecipes: async (_, __, { user }) => {
@@ -31,7 +75,9 @@ module.exports = {
             }
 
             const userDoc = await User.findById(user.id);
-            return await Recipe.find({ _id: { $in: userDoc.favoriteRecipes } });
+            const results = await Recipe.find({ _id: { $in: userDoc.favoriteRecipes } });
+
+            return transformId(results);
         },
 
         userRecipes: async (_, __, { user }) => {
@@ -39,7 +85,9 @@ module.exports = {
                 throw new AuthenticationError('You must be logged in to view your recipes.');
             }
 
-            return await Recipe.find({ author: user.id });
+            const results = await Recipe.find({ author: user.id });
+
+            return transformId(results);
         },
 
         pendingRecipes: async (_, __, { user }) => {
@@ -47,7 +95,9 @@ module.exports = {
                 throw new AuthenticationError('You must be an admin to view pending recipes.');
             }
 
-            return await Recipe.find({ isApproved: false });
+            const results = await Recipe.find({ isApproved: false });
+
+            return transformId(results);
         },
     },
 
@@ -106,13 +156,12 @@ module.exports = {
                 throw new ForbiddenError('You are not authorized to delete this recipe.');
             }
 
-            // delete all comments of this recipe
-            await Comment.deleteMany({ recipe: id });
+            await Promise.all([
+                Comment.deleteMany({ recipe: id }),
+                User.updateMany({ favoriteRecipes: id }, { $pull: { favoriteRecipes: id } }),
+                Recipe.findByIdAndDelete(id),
+            ]);
 
-            // remove the recipe from all users' favoriteRecipes
-            await User.updateMany({ favoriteRecipes: id }, { $pull: { favoriteRecipes: id } });
-
-            await Recipe.findByIdAndDelete(id);
             return true;
         },
 

@@ -127,7 +127,7 @@ const typeDefs = gql`
         user(id: ID!): User
 
         recipe(id: ID!): Recipe
-        recipes(limit: Int, offset: Int): [Recipe!]!
+        recipes(limit: Int, offset: Int, search: String): [Recipe!]!
         recipesByIngredients(ingredient: String!): [Recipe!]!
         favoriteRecipes: [Recipe!]!
         userRecipes: [Recipe!]!

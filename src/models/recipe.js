@@ -63,6 +63,9 @@ const RecipeSchema = new mongoose.Schema({
     },
 });
 
+RecipeSchema.index({ isApproved: 1, createdAt: -1 });
+RecipeSchema.index({ isApproved: 1, title: 1 });
+
 RecipeSchema.index({ 'ingredients.name': 'text', title: 'text' });
 
 module.exports = mongoose.model('Recipe', RecipeSchema);
