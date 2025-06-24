@@ -38,6 +38,7 @@ const typeDefs = gql`
         author: User!
         createdAt: String!
         recipe: Recipe!
+        updatedAt: String
     }
 
     type AuthPayload {
@@ -104,12 +105,14 @@ const typeDefs = gql`
     }
 
     type DeleteCommentResponse {
+        deletedId: ID!
         success: Boolean!
         message: String!
         deleteBy: String!
     }
 
     type DeleteMultipleCommentsResponse {
+        deletedIds: [ID!]!
         success: Boolean!
         message: String!
         deletedCount: Int!

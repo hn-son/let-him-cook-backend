@@ -2,11 +2,15 @@ const Comment = require('../../models/comment');
 const Recipe = require('../../models/recipe');
 const User = require('../../models/user');
 const { AuthenticationError, UserInputError } = require('apollo-server-express');
+const { transformId } = require('../../utils');
 
 module.exports = {
     Query: {
         recipeComments: async (_, { recipeId }) => {
-            return await Comment.find({ recipe: recipeId }).sort({ createdAt: -1 });
+            const comments = await Comment.find({ recipe: recipeId })
+                .sort({ createdAt: -1 })
+                .lean();
+            return transformId(comments);
         },
     },
 
@@ -64,10 +68,35 @@ module.exports = {
             await Comment.findByIdAndDelete(id);
 
             return {
+                deletedId: id, 
                 success: true,
                 message: isAdmin && !isOwner ? 'Comment deleted by admin' : 'Comment deleted',
                 deleteBy: user.role,
             };
+        },
+
+        updateComment: async (_, { id, content }, { user }) => {
+            if (!user) {
+                throw new AuthenticationError('You must be logged in to update a comment');
+            }
+
+            const comment = await Comment.findById(id);
+
+            if (!comment) {
+                throw new Error('Comment not found');
+            }
+
+            if (comment.author.toString() !== user.id) {
+                throw new AuthenticationError('You are not authorized to update this comment');
+            }
+
+            const updated = await Comment.findByIdAndUpdate(
+                id,
+                { content, updatedAt: new Date() },
+                { new: true }
+            ).lean();
+
+            return transformId(updated);
         },
 
         deleteMultipleComments: async (_, { commentIds }, { user }) => {
@@ -88,6 +117,7 @@ module.exports = {
                 console.log(`Admin ${user.username} deleted ${result.deletedCount} comments`);
 
                 return {
+                    deletedIds: commentIds,
                     success: true,
                     message: `Successfully deleted ${result.deletedCount} comments`,
                     deletedCount: result.deletedCount,
